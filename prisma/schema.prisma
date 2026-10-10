@@ -1,0 +1,202 @@
+// Prisma Schema for Plus Photography Studio (Bole, Addis Ababa, Ethiopia)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  STAFF
+  EDITOR
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  AWAITING_DEPOSIT
+  DEPOSIT_RECEIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DECLINED
+}
+
+enum PaymentStatus {
+  UNPAID
+  DEPOSIT_PENDING
+  DEPOSIT_PAID
+  FULLY_PAID
+  REFUNDED
+}
+
+enum ContactPreference {
+  PHONE
+  WHATSAPP
+  EMAIL
+}
+
+model User {
+  id            String      @id @default(cuid())
+  email         String      @unique
+  name          String
+  passwordHash  String
+  role          Role        @default(ADMIN)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  auditLogs     AuditLog[]
+}
+
+model Service {
+  id             String      @id @default(cuid())
+  slug           String      @unique
+  title          String
+  subtitle       String
+  category       String
+  heroImage      String
+  description    String
+  startingPrice  Int         // In Ethiopian Birr (ETB)
+  currency       String      @default("ETB")
+  isActive       Boolean     @default(true)
+  sortOrder      Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  packages       Package[]
+  bookings       Booking[]
+}
+
+model Package {
+  id             String      @id @default(cuid())
+  slug           String      @unique
+  name           String
+  description    String
+  price          Int         // In ETB integer minor units or full Birr
+  currency       String      @default("ETB")
+  duration       String
+  isPopular      Boolean     @default(false)
+  isDraft        Boolean     @default(true)
+  highlights     String      // JSON serialized string of inclusions
+  serviceId      String
+  service        Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  bookings       Booking[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model Customer {
+  id             String      @id @default(cuid())
+  fullName       String
+  email          String
+  phone          String
+  notes          String?
+  bookings       Booking[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model Booking {
+  id                 String                @id @default(cuid())
+  referenceNumber    String                @unique // e.g., PLUS-2025-XXXX
+  customerId         String
+  customer           Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  serviceId          String
+  service            Service               @relation(fields: [serviceId], references: [id])
+  packageId          String?
+  package            Package?              @relation(fields: [packageId], references: [id])
+  
+  eventDate          DateTime
+  preferredStartTime String?               // e.g. "10:00 AM"
+  estimatedDuration  String?
+  location           String                // Venue / Area in Addis Ababa
+  coverageDetails    String?
+  specialNotes       String?
+  contactPreference  ContactPreference     @default(PHONE)
+  
+  totalAmount        Int                   // In ETB
+  depositAmount      Int                   @default(0)
+  currency           String                @default("ETB")
+  paymentStatus      PaymentStatus         @default(UNPAID)
+  status             BookingStatus         @default(PENDING)
+  
+  adminNotes         String?
+  statusHistory      BookingStatusHistory[]
+  
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([eventDate])
+  @@index([status])
+  @@index([referenceNumber])
+}
+
+model BookingStatusHistory {
+  id         String        @id @default(cuid())
+  bookingId  String
+  booking    Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  fromStatus BookingStatus
+  toStatus   BookingStatus
+  note       String?
+  changedBy  String?       // User ID or "SYSTEM"
+  createdAt  DateTime      @default(now())
+}
+
+model BlockedDate {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  reason    String?  // e.g. "Holiday", "Private Studio Maintenance", "Fully Booked"
+  createdAt DateTime @default(now())
+}
+
+model PortfolioProject {
+  id               String   @id @default(cuid())
+  title            String
+  slug             String   @unique
+  category         String   // "Wedding", "Portrait", "Commercial", etc.
+  coverImage       String
+  galleryImages    String   // JSON string of image URLs
+  shortDescription String
+  description      String
+  videoUrl         String?
+  location         String   @default("Bole, Addis Ababa")
+  year             String   @default("2024")
+  featured         Boolean  @default(false)
+  isDemo           Boolean  @default(true)
+  published        Boolean  @default(true)
+  sortOrder        Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Inquiry {
+  id                String            @id @default(cuid())
+  name              String
+  email             String
+  phone             String?
+  service           String?
+  contactPreference ContactPreference @default(PHONE)
+  message           String
+  isRead            Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+model SiteSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+}
